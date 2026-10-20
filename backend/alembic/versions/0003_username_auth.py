@@ -20,7 +20,12 @@ def upgrade() -> None:
             """WITH candidates AS (
                    SELECT id,
                           COALESCE(NULLIF(left(lower(split_part(email, '@', 1)), 80), ''), 'user') AS base,
-                          count(*) OVER (PARTITION BY lower(split_part(email, '@', 1))) AS duplicates
+                          count(*) OVER (
+                              PARTITION BY COALESCE(
+                                  NULLIF(left(lower(split_part(email, '@', 1)), 80), ''),
+                                  'user'
+                              )
+                          ) AS duplicates
                    FROM users
                )
                UPDATE users AS target

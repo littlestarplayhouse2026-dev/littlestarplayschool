@@ -83,7 +83,6 @@ async def get_public_notices(
     result = await db.execute(stmt)
     notices = list(result.scalars().unique().all())
 
-    await db.commit()
     return notices, total
 
 
@@ -113,9 +112,11 @@ async def publish_due_notices(db: AsyncSession, now: datetime | None = None) -> 
     result = await db.execute(
         select(Notice).where(Notice.status == "SCHEDULED", Notice.published_at <= now)
     )
-    for notice in result.scalars().all():
+    due_notices = result.scalars().all()
+    for notice in due_notices:
         notice.status = "PUBLISHED"
-    await db.flush()
+    if due_notices:
+        await db.commit()
 
 
 async def get_admin_notices(
@@ -240,7 +241,10 @@ async def update_notice(
     data: NoticeUpdate,
 ) -> Notice:
     """Update an existing notice."""
-    stmt = _base_notice_query().where(Notice.id == notice_id)
+    # Serialize editors changing the same notice. PostgreSQL re-reads the row
+    # after a competing transaction commits, so partial updates don't overwrite
+    # one another from stale snapshots.
+    stmt = _base_notice_query().where(Notice.id == notice_id).with_for_update()
     result = await db.execute(stmt)
     notice = result.scalars().unique().one_or_none()
 

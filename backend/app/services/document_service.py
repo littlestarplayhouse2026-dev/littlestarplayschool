@@ -196,7 +196,8 @@ async def update_document(
     data: DocumentUpdate,
 ) -> Document:
     """Update an existing document."""
-    stmt = _base_document_query().where(Document.id == document_id)
+    # Serialize concurrent edits to one document on PostgreSQL.
+    stmt = _base_document_query().where(Document.id == document_id).with_for_update()
     result = await db.execute(stmt)
     document = result.scalars().unique().one_or_none()
 

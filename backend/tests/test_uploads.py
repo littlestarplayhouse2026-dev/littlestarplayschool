@@ -1,6 +1,9 @@
 import pytest
+from pathlib import Path
 from httpx import ASGITransport, AsyncClient
 from uuid import uuid4
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
 from app.models.stored_file import StoredFile
@@ -9,7 +12,7 @@ from app.main import app
 
 
 @pytest.mark.asyncio
-async def test_upload_validation_authorization_download_and_delete(auth_client: AsyncClient):
+async def test_upload_validation_authorization_download_and_delete(auth_client: AsyncClient, test_upload_dir):
     # A valid PNG signature is sufficient for the application's current signature check.
     payload = b"\x89PNG\r\n\x1a\n" + b"test-image-data"
     upload = await auth_client.post(
@@ -36,6 +39,13 @@ async def test_upload_validation_authorization_download_and_delete(auth_client: 
         files={"files": ("payload.exe", b"not allowed", "application/octet-stream")},
     )
     assert bad_extension.status_code == 400
+
+    bad_signature = await auth_client.post(
+        "/api/uploads",
+        files={"files": ("not-really.png", b"not a png file", "image/png")},
+    )
+    assert bad_signature.status_code == 400
+    assert len(list(Path(test_upload_dir).glob("*.png"))) == 1
 
     removed = await auth_client.delete(f"/api/uploads/admin/{file_id}")
     assert removed.status_code == 200
@@ -69,3 +79,26 @@ async def test_non_editor_session_cannot_download_private_upload(client: AsyncCl
     assert login.status_code == 200
     response = await client.get(f"/api/uploads/{file_id}/download")
     assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_upload_commit_failure_removes_file_and_metadata(
+    auth_client: AsyncClient, test_session_factory, test_upload_dir, monkeypatch
+):
+    payload = b"\x89PNG\r\n\x1a\n" + b"test-image-data"
+
+    async def fail_commit(_session):
+        raise RuntimeError("injected commit failure")
+
+    monkeypatch.setattr(AsyncSession, "commit", fail_commit)
+
+    with pytest.raises(RuntimeError, match="injected commit failure"):
+        await auth_client.post(
+            "/api/uploads",
+            files={"files": ("commit-failure.png", payload, "image/png")},
+        )
+
+    assert list(Path(test_upload_dir).iterdir()) == []
+    async with test_session_factory() as db:
+        count = await db.scalar(select(func.count(StoredFile.id)))
+    assert count == 0

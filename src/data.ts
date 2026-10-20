@@ -80,7 +80,7 @@ export const activities = [
 export const faq = [
   { q: 'What age group is Little Star Playhouse for?', a: 'Our programs are designed for young learners in the early childhood years. Please contact the school to talk through the best starting point for your child.' },
   { q: 'What programs can families ask about?', a: 'Families can ask about Playgroup, Nursery Readiness, and Creative Play. The team can share the current rhythm and availability during an enquiry.' },
-  { q: 'How do I make an admission enquiry?', a: 'Use the admission buttons on this website, send a WhatsApp message, call 9709142797, or email littlestarplayhouse2026@gmail.com.' },
+  { q: 'How do I make an admission enquiry?', a: 'Use the admission buttons on this website to call, email, or message the playhouse.' },
   { q: 'Where is the playhouse located?', a: 'Little Star Playhouse is in Ward 4, Janakpurdham, Dhanusha, Nepal, near the old Sanchaykosh Office on the way to Kataiyachauri.' },
   { q: 'How can I confirm fees and schedules?', a: 'Please contact the school directly so the team can share the latest information for your family. This prototype does not invent fee or schedule details.' }
 ]

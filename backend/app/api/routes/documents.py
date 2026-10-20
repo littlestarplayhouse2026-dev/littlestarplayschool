@@ -3,6 +3,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db, require_editor_or_admin, verify_csrf
@@ -108,6 +109,12 @@ async def create_document(
         doc = await document_service.create_document(db, data, user.id)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A concurrent change conflicted with this document. Refresh and try again.",
+        ) from exc
     return _build_document_response(doc)
 
 
@@ -125,6 +132,12 @@ async def update_document(
     except ValueError as exc:
         code = status.HTTP_404_NOT_FOUND if str(exc) == "Document not found" else 422
         raise HTTPException(status_code=code, detail=str(exc)) from exc
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A concurrent change conflicted with this document. Refresh and try again.",
+        ) from exc
     return _build_document_response(doc)
 
 

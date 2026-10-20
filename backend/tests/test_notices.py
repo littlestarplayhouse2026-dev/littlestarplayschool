@@ -1,6 +1,7 @@
 import pytest
 from httpx import AsyncClient
 from datetime import datetime, timedelta, timezone
+from sqlalchemy.exc import IntegrityError
 
 from app.services import notice_service
 
@@ -124,4 +125,24 @@ async def test_notice_schedule_and_expiry_validation(auth_client: AsyncClient):
         "expires_at": (now - timedelta(minutes=1)).isoformat(),
     })
     assert invalid_dates.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_concurrent_notice_slug_conflict_returns_retryable_conflict(
+    auth_client: AsyncClient, monkeypatch
+):
+    async def collide(_db, _data, _author_id):
+        raise IntegrityError("INSERT INTO notices", {}, ValueError("duplicate slug"))
+
+    monkeypatch.setattr(notice_service, "create_notice", collide)
+    response = await auth_client.post("/api/notices", json={
+        "title": "Concurrent Slug",
+        "excerpt": "Test conflict mapping",
+        "body": "<p>Test</p>",
+        "category": "General",
+        "status": "DRAFT",
+    })
+
+    assert response.status_code == 409
+    assert "Refresh and try again" in response.json()["detail"]
 

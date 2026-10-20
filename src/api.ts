@@ -1,7 +1,9 @@
 // Frontend API client for Little Star Playhouse FastAPI backend
 // All API calls go through this module. Uses VITE_API_BASE_URL from env.
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+// Defaults to the same-origin reverse-proxy path. Split deployments should set
+// VITE_API_BASE_URL at build time to the public API base ending in /api.
+const API_BASE = (import.meta.env.VITE_API_BASE_URL?.trim() || '/api').replace(/\/+$/, '')
 
 export function absoluteApiUrl(path: string): string {
   if (/^https?:\/\//i.test(path)) return path

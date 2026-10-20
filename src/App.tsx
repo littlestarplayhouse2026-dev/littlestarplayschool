@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } 
 import { activities, faq, programs, translations, type Category, type DocRecord, type Lang, type Notice } from './data'
 import * as api from './api'
 import type { ApiNotice, ApiDocument, ApiInquiry, ApiGalleryItem, DashboardData, UploadedFile, UserInfo } from './api'
+import { siteConfig } from './siteConfig'
 
 const HERO_ART = '/assets/hero-full.webp'
 const GALLERY_ART = '/assets/gallery-classroom.webp'
-const MAPS_URL = 'https://maps.app.goo.gl/1PW44EVbxNpbGBfC8'
 
 const iconPaths: Record<string, string> = {
   star: 'M12 2.8l2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 2.8z',
@@ -86,7 +86,7 @@ function SiteHeader({ lang, setLang, onNavigate }: { lang: Lang; setLang: (lang:
 
 function Footer({ lang, onNavigate }: { lang: Lang; onNavigate: (path: string) => void }) {
   const t = translations[lang]
-  return <footer className="site-footer"><div className="shell footer-grid"><div><button className="footer-logo" onClick={() => onNavigate('/')}><Logo /></button><p>A caring, joyful place where little learners explore, discover confidence, and grow through play.</p><div className="footer-socials"><a href="https://wa.me/9779709142797" aria-label="WhatsApp"><span>WA</span></a><a href="mailto:littlestarplayhouse2026@gmail.com" aria-label="Email"><Icon name="mail" size={17} /></a><a href="tel:+9779709142797" aria-label="Call"><Icon name="phone" size={17} /></a></div></div><div><h4>Explore</h4><button onClick={() => onNavigate('/about')}>{t.nav.about}</button><button onClick={() => onNavigate('/programs')}>{t.nav.programs}</button><button onClick={() => onNavigate('/our-little-world')}>{t.nav.world}</button><button onClick={() => onNavigate('/notices')}>{t.nav.notices}</button></div><div><h4>Parent shelf</h4><button onClick={() => onNavigate('/documents')}>{t.nav.documents}</button><button onClick={() => onNavigate('/contact')}>{t.actions.enquire}</button><button onClick={() => window.open(MAPS_URL, '_blank')}>{t.actions.directions}</button><button onClick={() => onNavigate('/admin')}>{t.nav.admin}</button></div><div><h4>Come say hello</h4><p className="footer-address">Ward 4, Janakpurdham,<br />Dhanusha, Nepal<br /><span>Near the old Sanchaykosh Office, on the way to Kataiyachauri.</span></p><a href="tel:+9779709142797">9709142797</a><a href="mailto:littlestarplayhouse2026@gmail.com">littlestarplayhouse2026@gmail.com</a></div></div><div className="shell footer-bottom"><span>© 2026 Little Star Playhouse</span><span>A safe place for little stars to shine.</span></div></footer>
+  return <footer className="site-footer"><div className="shell footer-grid"><div><button className="footer-logo" onClick={() => onNavigate('/')}><Logo /></button><p>A caring, joyful place where little learners explore, discover confidence, and grow through play.</p><div className="footer-socials"><a href={siteConfig.whatsappUrl} aria-label="WhatsApp"><span>WA</span></a><a href={siteConfig.emailLink} aria-label="Email"><Icon name="mail" size={17} /></a><a href={siteConfig.phoneLink} aria-label="Call"><Icon name="phone" size={17} /></a></div></div><div><h4>Explore</h4><button onClick={() => onNavigate('/about')}>{t.nav.about}</button><button onClick={() => onNavigate('/programs')}>{t.nav.programs}</button><button onClick={() => onNavigate('/our-little-world')}>{t.nav.world}</button><button onClick={() => onNavigate('/notices')}>{t.nav.notices}</button></div><div><h4>Parent shelf</h4><button onClick={() => onNavigate('/documents')}>{t.nav.documents}</button><button onClick={() => onNavigate('/contact')}>{t.actions.enquire}</button><button onClick={() => siteConfig.mapsUrl && window.open(siteConfig.mapsUrl, '_blank')}>{t.actions.directions}</button><button onClick={() => onNavigate('/admin')}>{t.nav.admin}</button></div><div><h4>Come say hello</h4><p className="footer-address">Ward 4, Janakpurdham,<br />Dhanusha, Nepal<br /><span>Near the old Sanchaykosh Office, on the way to Kataiyachauri.</span></p><a href={siteConfig.phoneLink}>{siteConfig.phoneDisplay}</a><a href={siteConfig.emailLink}>{siteConfig.email}</a></div></div><div className="shell footer-bottom"><span>© 2026 Little Star Playhouse</span><span>A safe place for little stars to shine.</span></div></footer>
 }
 
 function PublicShell({ children, lang, setLang, onNavigate }: { children: ReactNode; lang: Lang; setLang: (lang: Lang) => void; onNavigate: (path: string) => void }) {
@@ -111,9 +111,10 @@ function HomePage({ lang, setLang, onNavigate }: { lang: Lang; setLang: (lang: L
 function HomeNoticePreview({ onNavigate }: { onNavigate: (path: string) => void }) {
   const [items, setItems] = useState<ApiNotice[]>([])
   const [error, setError] = useState(false)
-  const load = () => api.getPublicNotices({ page_size: 3 }).then(result => { setItems(result.items); setError(false) }).catch(() => setError(true))
+  const [loading, setLoading] = useState(true)
+  const load = () => { setLoading(true); api.getPublicNotices({ page_size: 3 }).then(result => { setItems(result.items); setError(false) }).catch(() => setError(true)).finally(() => setLoading(false)) }
   useEffect(() => { load() }, [])
-  return <section className="section"><div className="shell"><div className="section-heading-row"><div><SectionLabel tone="blue">From the school</SectionLabel><h2>Recent <span>notices.</span></h2></div><Button variant="text" onClick={() => onNavigate('/notices')}>All notices <Icon name="arrow" size={16} /></Button></div>{error ? <div role="alert" className="upload-error">Recent notices could not be loaded. <Button variant="outline" onClick={load}>Retry</Button></div> : items.length ? <div className="notice-feed">{items.map(notice => <NoticeCard key={notice.id} notice={notice} onNavigate={onNavigate} />)}</div> : <p>No published notices yet.</p>}</div></section>
+  return <section className="section"><div className="shell"><div className="section-heading-row"><div><SectionLabel tone="blue">From the school</SectionLabel><h2>Recent <span>notices.</span></h2></div><Button variant="text" onClick={() => onNavigate('/notices')}>All notices <Icon name="arrow" size={16} /></Button></div>{loading ? <p role="status">Loading recent notices…</p> : error ? <div role="alert" className="upload-error">Recent notices could not be loaded. <Button variant="outline" onClick={load}>Retry</Button></div> : items.length ? <div className="notice-feed">{items.map(notice => <NoticeCard key={notice.id} notice={notice} onNavigate={onNavigate} />)}</div> : <p>No published notices yet.</p>}</div></section>
 }
 
 function ProgramsPreview({ lang, onNavigate }: { lang: Lang; onNavigate: (path: string) => void }) { const t = translations[lang]; return <section className="section section--pale-blue"><div className="shell"><div className="section-heading-row"><div><SectionLabel tone="blue">Find your little rhythm</SectionLabel><h2>Programs made for <span>curious beginnings.</span></h2></div><Button variant="text" onClick={() => onNavigate('/programs')}>{t.actions.explore} <Icon name="arrow" size={16} /></Button></div><div className="program-grid">{programs.map((program, index) => <article className={`program-card program-card--${program.color}`} key={program.title}><div className="program-art"><img src={program.image} alt={`${program.title} activity`} loading="lazy" /><span className="program-art-overlay" /><span className="program-icon"><Icon name={program.icon} size={25} /></span><span className="program-number">0{index + 1}</span><div className="program-shape program-shape--one" /><div className="program-shape program-shape--two" /></div><div className="program-content"><span className="program-age">{program.age}</span><h3>{program.title}</h3><p>{program.text}</p><button onClick={() => onNavigate('/programs')}>Explore program <Icon name="arrow" size={15} /></button></div></article>)}</div></div></section> }
@@ -121,16 +122,19 @@ function WorldPreview({ onNavigate }: { onNavigate: (path: string) => void }) { 
 function GalleryPreview() {
   const [items, setItems] = useState<ApiGalleryItem[]>([])
   const [selected, setSelected] = useState<ApiGalleryItem | null>(null)
-  useEffect(() => { api.getGallery().then(result => setItems(result.items)).catch(() => setItems([])) }, [])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const load = () => { setLoading(true); setError(false); api.getGallery().then(result => setItems(result.items)).catch(() => setError(true)).finally(() => setLoading(false)) }
+  useEffect(() => { load() }, [])
   const open = (item: ApiGalleryItem) => setSelected(item)
   return <section className="section gallery-section"><div className="shell">
     <div className="section-heading-row"><div><SectionLabel tone="coral">A peek inside</SectionLabel><h2>Little moments from <span>our happy days.</span></h2></div><span className="gallery-caption"><Icon name="image" size={16} /> {items.length ? `${items.length} moments` : 'A little glimpse of play'}</span></div>
-    {items.length ? <div className="gallery-live-grid">{items.map(item => <button className="gallery-live-card" key={item.id} onClick={() => open(item)}><img src={api.absoluteApiUrl(item.image_url)} alt={item.caption} loading="lazy" /><span>{item.caption}</span></button>)}</div> : <div className="gallery-grid"><div className="gallery-tile gallery-tile--large gallery-tile-button" role="button" tabIndex={0} onClick={() => setSelected({ id: 'preview', file_id: '', caption: 'Building and discovery', image_url: GALLERY_ART, created_at: '' })} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') setSelected({ id: 'preview', file_id: '', caption: 'Building and discovery', image_url: GALLERY_ART, created_at: '' }) }} aria-label="Open classroom image preview"><img src={GALLERY_ART} alt="Children creating with blocks and art supplies" loading="lazy" /><span>Building and discovery · View larger</span></div><div className="gallery-tile gallery-tile--yellow"><span className="gallery-doodle"><Icon name="star" size={35} /></span><strong>Make<br />room for<br /><em>wonder.</em></strong></div><div className="gallery-tile gallery-tile--blue"><span className="gallery-doodle"><Icon name="music" size={32} /></span><strong>Sing it,<br />move it,<br /><em>feel it.</em></strong></div></div>}
+    {loading ? <p role="status">Loading gallery…</p> : error ? <div role="alert" className="upload-error">Gallery photos could not be loaded. <Button variant="outline" onClick={load}>Retry</Button></div> : items.length ? <div className="gallery-live-grid">{items.map(item => <button className="gallery-live-card" key={item.id} onClick={() => open(item)}><img src={api.absoluteApiUrl(item.image_url)} alt={item.caption} loading="lazy" /><span>{item.caption}</span></button>)}</div> : <div className="gallery-grid"><div className="gallery-tile gallery-tile--large gallery-tile-button" role="button" tabIndex={0} onClick={() => setSelected({ id: 'preview', file_id: '', caption: 'Building and discovery', image_url: GALLERY_ART, created_at: '' })} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') setSelected({ id: 'preview', file_id: '', caption: 'Building and discovery', image_url: GALLERY_ART, created_at: '' }) }} aria-label="Open classroom image preview"><img src={GALLERY_ART} alt="Children creating with blocks and art supplies" loading="lazy" /><span>Building and discovery · View larger</span></div><div className="gallery-tile gallery-tile--yellow"><span className="gallery-doodle"><Icon name="star" size={35} /></span><strong>Make<br />room for<br /><em>wonder.</em></strong></div><div className="gallery-tile gallery-tile--blue"><span className="gallery-doodle"><Icon name="music" size={32} /></span><strong>Sing it,<br />move it,<br /><em>feel it.</em></strong></div></div>}
   </div>{selected && <div className="lightbox" role="dialog" aria-modal="true" aria-label={selected.caption} onClick={() => setSelected(null)}><div className="lightbox-card" onClick={event => event.stopPropagation()}><button className="lightbox-close" aria-label="Close image preview" onClick={() => setSelected(null)}><Icon name="close" size={20} /></button><img src={selected.id === 'preview' ? selected.image_url : api.absoluteApiUrl(selected.image_url)} alt={selected.caption} /><p>{selected.caption}</p></div></div>}</section>
 }
-function AdmissionCTA({ lang, onNavigate }: { lang: Lang; onNavigate: (path: string) => void }) { const t = translations[lang]; return <section className="admission-section"><div className="shell admission-card"><div className="admission-stars"><Icon name="star" size={22} /><Icon name="star" size={13} /><Icon name="star" size={17} /></div><div><SectionLabel tone="yellow">A happy next chapter</SectionLabel><h2>Your child’s next happy chapter <span>starts here!</span></h2><p>Have a question, a little one ready to explore, or simply want to say hello? We would love to hear from you.</p></div><div className="admission-actions"><Button onClick={() => window.open('https://wa.me/9779709142797', '_blank')}>{t.actions.whatsapp} <Icon name="arrow" size={16} /></Button><Button variant="outline" onClick={() => onNavigate('/contact')}>{t.actions.call} <Icon name="phone" size={16} /></Button></div></div></section> }
-function FAQPreview() { const [open, setOpen] = useState(0); return <section className="section faq-section"><div className="shell split-grid split-grid--faq"><div className="section-copy"><SectionLabel tone="blue">The little things</SectionLabel><h2>Questions are <span>welcome here.</span></h2><p>Starting something new can bring a lot of questions. Here are a few gentle answers to get you started.</p><div className="faq-badge"><Icon name="sparkle" size={19} /><span>Still curious?</span><a href="mailto:littlestarplayhouse2026@gmail.com">Ask us anything <Icon name="arrow" size={14} /></a></div></div><div className="faq-list">{faq.map((item, index) => <div className={`faq-item ${open === index ? 'is-open' : ''}`} key={item.q}><button onClick={() => setOpen(open === index ? -1 : index)} aria-expanded={open === index}><span>{item.q}</span><span className="faq-plus"><Icon name={open === index ? 'close' : 'plus'} size={17} /></span></button>{open === index && <p>{item.a}</p>}</div>)}</div></div></section> }
-function ContactPreview({ lang, onNavigate }: { lang: Lang; onNavigate: (path: string) => void }) { const t = translations[lang]; return <section className="contact-preview"><div className="shell contact-preview-inner"><div><SectionLabel tone="yellow">Come say hello</SectionLabel><h2>We’re right here in <span>Janakpurdham.</span></h2><p>Ward 4, Dhanusha, Nepal<br />Near the old Sanchaykosh Office, on the way to Kataiyachauri.</p></div><div className="contact-actions"><a href="tel:+9779709142797"><Icon name="phone" size={18} />9709142797</a><a href="mailto:littlestarplayhouse2026@gmail.com"><Icon name="mail" size={18} />Email the playhouse</a><Button variant="outline" onClick={() => window.open(MAPS_URL, '_blank')}>{t.actions.directions} <Icon name="arrow" size={16} /></Button></div></div></section> }
+function AdmissionCTA({ lang, onNavigate }: { lang: Lang; onNavigate: (path: string) => void }) { const t = translations[lang]; return <section className="admission-section"><div className="shell admission-card"><div className="admission-stars"><Icon name="star" size={22} /><Icon name="star" size={13} /><Icon name="star" size={17} /></div><div><SectionLabel tone="yellow">A happy next chapter</SectionLabel><h2>Your child’s next happy chapter <span>starts here!</span></h2><p>Have a question, a little one ready to explore, or simply want to say hello? We would love to hear from you.</p></div><div className="admission-actions"><Button onClick={() => siteConfig.whatsappUrl && window.open(siteConfig.whatsappUrl, '_blank')}>{t.actions.whatsapp} <Icon name="arrow" size={16} /></Button><Button variant="outline" onClick={() => onNavigate('/contact')}>{t.actions.call} <Icon name="phone" size={16} /></Button></div></div></section> }
+function FAQPreview() { const [open, setOpen] = useState(0); return <section className="section faq-section"><div className="shell split-grid split-grid--faq"><div className="section-copy"><SectionLabel tone="blue">The little things</SectionLabel><h2>Questions are <span>welcome here.</span></h2><p>Starting something new can bring a lot of questions. Here are a few gentle answers to get you started.</p><div className="faq-badge"><Icon name="sparkle" size={19} /><span>Still curious?</span><a href={siteConfig.emailLink}>Ask us anything <Icon name="arrow" size={14} /></a></div></div><div className="faq-list">{faq.map((item, index) => <div className={`faq-item ${open === index ? 'is-open' : ''}`} key={item.q}><button onClick={() => setOpen(open === index ? -1 : index)} aria-expanded={open === index}><span>{item.q}</span><span className="faq-plus"><Icon name={open === index ? 'close' : 'plus'} size={17} /></span></button>{open === index && <p>{item.a}</p>}</div>)}</div></div></section> }
+function ContactPreview({ lang, onNavigate }: { lang: Lang; onNavigate: (path: string) => void }) { const t = translations[lang]; return <section className="contact-preview"><div className="shell contact-preview-inner"><div><SectionLabel tone="yellow">Come say hello</SectionLabel><h2>We’re right here in <span>Janakpurdham.</span></h2><p>Ward 4, Dhanusha, Nepal<br />Near the old Sanchaykosh Office, on the way to Kataiyachauri.</p></div><div className="contact-actions"><a href={siteConfig.phoneLink}><Icon name="phone" size={18} />{siteConfig.phoneDisplay}</a><a href={siteConfig.emailLink}><Icon name="mail" size={18} />Email the playhouse</a><Button variant="outline" onClick={() => siteConfig.mapsUrl && window.open(siteConfig.mapsUrl, '_blank')}>{t.actions.directions} <Icon name="arrow" size={16} /></Button></div></div></section> }
 
 function AboutPage({ lang, setLang, onNavigate }: { lang: Lang; setLang: (lang: Lang) => void; onNavigate: (path: string) => void }) { return <PublicShell lang={lang} setLang={setLang} onNavigate={onNavigate}><PageIntro eyebrow="The heart of the playhouse" title="A safe place for little stars to shine." text="We believe the early years deserve patience, wonder, and lots of room to become." tone="green" /><section className="section"><div className="shell split-grid"><div className="section-copy"><SectionLabel tone="green">Our philosophy</SectionLabel><h2>Childhood is not a race. <span>It is a world.</span></h2><p>At Little Star Playhouse, learning begins with belonging. Our environment is designed to help children feel safe enough to wonder, brave enough to try, and supported enough to keep going.</p><p>We use play, conversation, movement, making, and warm relationships as invitations into learning. The details are little, but the discoveries are big.</p><div className="values-row"><div><strong>01</strong><span>Warm relationships</span></div><div><strong>02</strong><span>Playful learning</span></div><div><strong>03</strong><span>Growing confidence</span></div></div></div><div className="story-card story-card--green"><div className="story-card-star"><Icon name="star" size={32} /></div><h3>Little Star<br /><span>promise</span></h3><p>Every child deserves a place where their questions are welcome and their small steps are celebrated.</p><div className="story-card-line" /></div></div></section><AdmissionCTA lang="en" onNavigate={onNavigate} /></PublicShell> }
 function ProgramsPage({ lang, setLang, onNavigate }: { lang: Lang; setLang: (lang: Lang) => void; onNavigate: (path: string) => void }) { return <PublicShell lang={lang} setLang={setLang} onNavigate={onNavigate}><PageIntro eyebrow="Find your little rhythm" title="Programs that grow with curiosity." text="Every program is an invitation: to play, to make, to move, and to discover what comes next." tone="blue" /><section className="section section--pale-yellow"><div className="shell program-grid program-grid--page">{programs.map((program, index) => <article className={`program-card program-card--${program.color}`} key={program.title}><div className="program-art"><img src={program.image} alt={`${program.title} activity`} loading="lazy" /><span className="program-art-overlay" /><span className="program-icon"><Icon name={program.icon} size={25} /></span><span className="program-number">0{index + 1}</span><div className="program-shape program-shape--one" /><div className="program-shape program-shape--two" /></div><div className="program-content"><span className="program-age">{program.age}</span><h3>{program.title}</h3><p>{program.text}</p><ul><li><Icon name="check" size={15} />Stories and shared conversation</li><li><Icon name="check" size={15} />Hands-on creative invitations</li><li><Icon name="check" size={15} />Gentle routines that build confidence</li></ul><Button variant="text" onClick={() => onNavigate('/contact')}>Ask about this program <Icon name="arrow" size={15} /></Button></div></article>)}</div></section><AdmissionCTA lang="en" onNavigate={onNavigate} /></PublicShell> }
@@ -173,7 +177,7 @@ function ContactPage({ lang, setLang, onNavigate }: { lang: Lang; setLang: (lang
     }
   }
 
-  return <PublicShell lang={lang} setLang={setLang} onNavigate={onNavigate}><PageIntro eyebrow="We’d love to hear from you" title="Come say hello to the playhouse." text="Questions, directions, admission enquiries, or a simple hello — there is always room for a good conversation." tone="coral" /><section className="section"><div className="shell contact-page-grid"><div className="contact-detail-card"><SectionLabel tone="blue">Find us here</SectionLabel><h2>Little Star<br /><span>Playhouse</span></h2><p>Ward 4, Janakpurdham, Dhanusha, Nepal</p><p className="muted">Near the old Sanchaykosh Office, on the way to Kataiyachauri.</p><div className="contact-detail-list"><a href="tel:+9779709142797"><span><Icon name="phone" size={19} /></span><div><small>Phone</small><strong>9709142797</strong></div></a><a href="mailto:littlestarplayhouse2026@gmail.com"><span><Icon name="mail" size={19} /></span><div><small>Email</small><strong>littlestarplayhouse2026@gmail.com</strong></div></a></div><div className="contact-detail-actions"><Button onClick={() => window.open('https://wa.me/9779709142797', '_blank')}>WhatsApp <Icon name="arrow" size={15} /></Button><Button variant="outline" onClick={() => window.open(MAPS_URL, '_blank')}>Get directions <Icon name="pin" size={16} /></Button></div></div><div className="enquiry-card"><SectionLabel tone="yellow">Start a conversation</SectionLabel><h2>Tell us a little <span>about your question.</span></h2>{success && <div className="mock-banner mock-banner--green"><Icon name="check" size={18} /><span>{success}</span></div>}{error && <div className="upload-error"><Icon name="info" size={18} /><span>{error}</span></div>}        <form onSubmit={handleSubmit}>
+  return <PublicShell lang={lang} setLang={setLang} onNavigate={onNavigate}><PageIntro eyebrow="We’d love to hear from you" title="Come say hello to the playhouse." text="Questions, directions, admission enquiries, or a simple hello — there is always room for a good conversation." tone="coral" /><section className="section"><div className="shell contact-page-grid"><div className="contact-detail-card"><SectionLabel tone="blue">Find us here</SectionLabel><h2>Little Star<br /><span>Playhouse</span></h2><p>Ward 4, Janakpurdham, Dhanusha, Nepal</p><p className="muted">Near the old Sanchaykosh Office, on the way to Kataiyachauri.</p><div className="contact-detail-list"><a href={siteConfig.phoneLink}><span><Icon name="phone" size={19} /></span><div><small>Phone</small><strong>{siteConfig.phoneDisplay}</strong></div></a><a href={siteConfig.emailLink}><span><Icon name="mail" size={19} /></span><div><small>Email</small><strong>{siteConfig.email}</strong></div></a></div><div className="contact-detail-actions"><Button onClick={() => siteConfig.whatsappUrl && window.open(siteConfig.whatsappUrl, '_blank')}>WhatsApp <Icon name="arrow" size={15} /></Button><Button variant="outline" onClick={() => siteConfig.mapsUrl && window.open(siteConfig.mapsUrl, '_blank')}>Get directions <Icon name="pin" size={16} /></Button></div></div><div className="enquiry-card"><SectionLabel tone="yellow">Start a conversation</SectionLabel><h2>Tell us a little <span>about your question.</span></h2>{success && <div className="mock-banner mock-banner--green"><Icon name="check" size={18} /><span>{success}</span></div>}{error && <div className="upload-error"><Icon name="info" size={18} /><span>{error}</span></div>}        <form onSubmit={handleSubmit}>
           <label>Your name<input required value={name} onChange={e => setName(e.target.value)} placeholder="A parent or carer name" /></label>
           <label>Phone number<input required value={phone} onChange={e => setPhone(e.target.value)} placeholder="+977 98XXXXXXXX" /></label>
           <label>Email (optional)<input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" /></label>
@@ -517,6 +521,7 @@ function AdminMessages({ toast }: { toast: (msg: string) => void }) {
   const [inquiries, setInquiries] = useState<ApiInquiry[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [selected, setSelected] = useState<ApiInquiry | null>(null)
@@ -525,12 +530,13 @@ function AdminMessages({ toast }: { toast: (msg: string) => void }) {
 
   const loadData = () => {
     setLoading(true)
+    setLoadError('')
     api.getAdminInquiries({ page, page_size: pageSize, search: query || undefined, status_filter: statusFilter })
       .then(res => {
         setInquiries(res.items)
         setTotal(res.total)
       })
-      .catch(err => toast(err.detail || 'Failed to load inquiries'))
+      .catch(err => setLoadError(err.detail || 'Failed to load inquiries. Please try again.'))
       .finally(() => setLoading(false))
   }
 
@@ -574,6 +580,7 @@ function AdminMessages({ toast }: { toast: (msg: string) => void }) {
         ))}
       </div>
     </div>
+    {loadError && <div className="upload-error" role="alert">{loadError} <Button variant="outline" onClick={loadData}>Retry</Button></div>}
     <section className="admin-panel table-panel">
       <div className="responsive-table">
         <div className="table-row table-row--head" style={{ gridTemplateColumns: '2fr 1.3fr 1fr 1fr 1.2fr' }}>
@@ -583,7 +590,7 @@ function AdminMessages({ toast }: { toast: (msg: string) => void }) {
           <span>Status</span>
           <span>Actions</span>
         </div>
-        {loading ? <p style={{ padding: '24px' }}>Loading inquiries...</p> : inquiries.length === 0 ? <EmptyState title="No messages found" text="No parent inquiries match your filter or search query." /> : (
+        {loadError ? null : loading ? <p style={{ padding: '24px' }}>Loading inquiries...</p> : inquiries.length === 0 ? <EmptyState title="No messages found" text="No parent inquiries match your filter or search query." /> : (
           inquiries.map(item => (
             <div key={item.id} className="table-row inquiries-row" style={{ gridTemplateColumns: '2fr 1.3fr 1fr 1fr 1.2fr' }} onClick={() => setSelected(item)}>
               <span className="table-title">
@@ -654,12 +661,14 @@ function AdminNotices({ onNavigate, toast }: { onNavigate: (path: string) => voi
   const [category, setCategory] = useState('')
   const [rows, setRows] = useState<ApiNotice[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
 
   const loadNotices = () => {
     setLoading(true)
+    setLoadError('')
     api.getAdminNotices({ search: query || undefined, category: category || undefined, status: status === 'All statuses' ? undefined : status })
       .then(res => setRows(res.items))
-      .catch(err => toast(err.detail || 'Could not load notices'))
+      .catch(err => setLoadError(err.detail || 'Could not load notices. Please try again.'))
       .finally(() => setLoading(false))
   }
 
@@ -703,10 +712,11 @@ function AdminNotices({ onNavigate, toast }: { onNavigate: (path: string) => voi
         <option>ARCHIVED</option>
       </select>
     </div>
+    {loadError && <div className="upload-error" role="alert">{loadError} <Button variant="outline" onClick={loadNotices}>Retry</Button></div>}
     <section className="admin-panel table-panel">
       <div className="responsive-table">
         <div className="table-row table-row--head"><span>Notice</span><span>Category</span><span>Status</span><span>Created</span><span>Actions</span></div>
-        {loading ? <p style={{ padding: '24px' }}>Loading notices...</p> : rows.length === 0 ? <EmptyState title="No notices match" text="Try a different search or status filter." /> : (
+        {loadError ? null : loading ? <p style={{ padding: '24px' }}>Loading notices...</p> : rows.length === 0 ? <EmptyState title="No notices match" text="Try a different search or status filter." /> : (
           rows.map(item => (
             <div className="table-row" key={item.id}>
               <span className="table-title">
@@ -927,7 +937,7 @@ function NoticeComposer({ editId, onNavigate, toast }: { editId?: string; onNavi
         <div className="field-group"><label htmlFor="notice-excerpt">Short Summary / Excerpt</label><input id="notice-excerpt" value={excerpt} onChange={e => setExcerpt(e.target.value)} placeholder="One or two sentences summarizing the update" /></div>
         <div className="field-grid">
           <label>Category<select value={category} onChange={e => setCategory(e.target.value)}><option>General</option><option>Important</option><option>Events</option><option>Holidays</option><option>Documents</option></select></label>
-          <label>External Link (optional)<input value={externalUrl} onChange={e => setExternalUrl(e.target.value)} placeholder="https://example.com" /></label>
+          <label>External Link (optional)<input value={externalUrl} onChange={e => setExternalUrl(e.target.value)} placeholder="Paste an external link" /></label>
         </div>
         <div className="editor-field">
           <div className="editor-label"><label>Notice Body (Rich Text)</label><span>Formatted Content</span></div>
@@ -961,7 +971,7 @@ function NoticeComposer({ editId, onNavigate, toast }: { editId?: string; onNavi
         <div className="modal-card">
           <button className="modal-close" onClick={() => setLinkOpen(false)}><Icon name="close" size={17} /></button>
           <h2>Insert Link</h2>
-          <label>URL<input value={link} onChange={e => setLink(e.target.value)} placeholder="https://" autoFocus /></label>
+          <label>URL<input value={link} onChange={e => setLink(e.target.value)} placeholder="Paste a link" autoFocus /></label>
           <div className="modal-actions">
             <Button variant="outline" onClick={() => setLinkOpen(false)}>Cancel</Button>
             <Button onClick={() => { document.execCommand('createLink', false, link); setLinkOpen(false); toast('Link inserted'); }}>Insert Link</Button>
@@ -978,6 +988,7 @@ function AdminUploads({ toast }: { toast: (msg: string) => void }) {
   const [files, setFiles] = useState<File[]>([])
   const [uploads, setUploads] = useState<UploadedFile[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [search, setSearch] = useState('')
@@ -985,9 +996,10 @@ function AdminUploads({ toast }: { toast: (msg: string) => void }) {
 
   const loadUploads = () => {
     setLoading(true)
+    setLoadError('')
     api.getAdminUploads({ search: search || undefined, file_type: fileType === 'all' ? undefined : fileType })
       .then(res => setUploads(res.items))
-      .catch(err => toast(err.detail || 'Could not load uploads'))
+      .catch(err => setLoadError(err.detail || 'Could not load uploads. Please try again.'))
       .finally(() => setLoading(false))
   }
 
@@ -1054,7 +1066,8 @@ function AdminUploads({ toast }: { toast: (msg: string) => void }) {
       </div>
     </div>
 
-    {loading ? <p>Loading storage library...</p> : uploads.length === 0 ? <EmptyState title="No uploaded files" text="Upload files using the drag-and-drop zone above." /> : (
+    {loadError && <div className="upload-error" role="alert">{loadError} <Button variant="outline" onClick={loadUploads}>Retry</Button></div>}
+    {loadError ? null : loading ? <p>Loading storage library...</p> : uploads.length === 0 ? <EmptyState title="No uploaded files" text="Upload files using the drag-and-drop zone above." /> : (
       <div className="upload-manager-grid">
         {uploads.map(file => {
           const isImg = file.mime_type.startsWith('image/')
@@ -1088,11 +1101,12 @@ function AdminGallery({ toast }: { toast: (msg: string) => void }) {
   const [busy, setBusy] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const [uploadError, setUploadError] = useState('')
   const previewUrl = useMemo(() => image ? URL.createObjectURL(image) : '', [image])
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl) }, [previewUrl])
-  const load = () => api.getGallery().then(result => setItems(result.items)).catch(error => toast(error.detail || 'Could not load gallery')).finally(() => setLoading(false))
+  const load = () => { setLoading(true); setLoadError(''); return api.getGallery().then(result => setItems(result.items)).catch(error => setLoadError(error.detail || 'Could not load gallery. Please try again.')).finally(() => setLoading(false)) }
   useEffect(() => { load() }, [])
   const chooseImage = (file?: File) => {
     if (!file) return
@@ -1138,7 +1152,7 @@ function AdminGallery({ toast }: { toast: (msg: string) => void }) {
       </section>
       <section className="admin-panel">
         <div className="panel-head"><div><span className="admin-eyebrow">Public gallery</span><h2>Uploaded images</h2></div><span className="panel-count">{items.length} images</span></div>
-        {loading ? <p>Loading gallery…</p> : items.length ? <div className="admin-gallery-grid">{items.map(item => <article key={item.id}><img src={api.absoluteApiUrl(item.image_url)} alt={item.caption} /><div><p>{item.caption}</p><button className="btn-delete" aria-label={`Remove ${item.caption}`} onClick={() => remove(item)}><Icon name="trash" size={16} /></button></div></article>)}</div> : <div className="empty-state"><span><Icon name="image" size={25} /></span><h3>No photos yet</h3><p>Upload an image and caption to add the first public gallery item.</p></div>}
+        {loadError ? <div className="upload-error" role="alert">{loadError} <Button variant="outline" onClick={load}>Retry</Button></div> : loading ? <p>Loading gallery…</p> : items.length ? <div className="admin-gallery-grid">{items.map(item => <article key={item.id}><img src={api.absoluteApiUrl(item.image_url)} alt={item.caption} /><div><p>{item.caption}</p><button className="btn-delete" aria-label={`Remove ${item.caption}`} onClick={() => remove(item)}><Icon name="trash" size={16} /></button></div></article>)}</div> : <div className="empty-state"><span><Icon name="image" size={25} /></span><h3>No photos yet</h3><p>Upload an image and caption to add the first public gallery item.</p></div>}
       </section>
     </div>
   </>
@@ -1156,12 +1170,17 @@ function AdminDocuments({ toast, embedded = false }: { toast: (message: string) 
   const [expiresAt, setExpiresAt] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadingDocs, setLoadingDocs] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
 
   const loadDocs = () => {
+    setLoadingDocs(true)
+    setLoadError('')
     api.getAdminDocuments({ page_size: 100 })
       .then(res => setRows(res.items))
-      .catch(err => toast(err.detail || 'Could not load documents'))
+      .catch(err => setLoadError(err.detail || 'Could not load documents. Please try again.'))
+      .finally(() => setLoadingDocs(false))
   }
 
   useEffect(() => { loadDocs() }, [])
@@ -1243,8 +1262,9 @@ function AdminDocuments({ toast, embedded = false }: { toast: (message: string) 
       </section>
       <section className="admin-panel">
         <div className="panel-head"><div><span className="admin-eyebrow">Current Library</span><h2>Resource Records</h2></div><span className="panel-count">{rows.length} records</span></div>
+        {loadError && <div className="upload-error" role="alert">{loadError} <Button variant="outline" onClick={loadDocs}>Retry</Button></div>}
         <div className="resource-admin-list">
-          {rows.length === 0 ? <p className="muted" style={{ padding: '20px' }}>No documents in repository.</p> : rows.map(doc => (
+          {loadingDocs ? <p className="muted" style={{ padding: '20px' }}>Loading documents…</p> : loadError ? null : rows.length === 0 ? <p className="muted" style={{ padding: '20px' }}>No documents in repository.</p> : rows.map(doc => (
             <div key={doc.id} className="resource-admin-row">
               <FileTypeIcon type={doc.file?.extension || 'PDF'} />
               <div><strong>{doc.title}</strong><small>{doc.category} · {(doc.file?.file_size ? (doc.file.file_size / 1024).toFixed(0) : '0')} KB</small></div>

@@ -26,13 +26,13 @@ In a second terminal from the repository root:
 pnpm dev
 ```
 
-Set the backend `FRONTEND_ORIGINS` to the exact Vite origin (normally `http://localhost:5173`) and root `VITE_API_BASE_URL` to `http://localhost:8000/api`. Never use the sample values as production credentials. The backend's existing `.env` should remain private and must not be copied into source control.
+Set the backend `FRONTEND_ORIGINS` to the exact Vite origin (normally `http://localhost:3000`). The root `.env.example` configures the frontend to use `/api` and Vite proxies that path to the local backend at `VITE_DEV_API_PROXY_TARGET`. The public contact links are configured with `VITE_PUBLIC_*` variables. Never use sample values as production credentials. The backend's existing `.env` should remain private and must not be copied into source control.
 
 ## Configuration
 
-Backend variables are documented in [`backend/.env.example`](backend/.env.example). `DATABASE_URL` accepts PostgreSQL URLs; Supabase PostgreSQL connections are automatically given `sslmode=require` if omitted. Use the provider's direct or session-pooler URL for migrations and confirm its connection limit before selecting a pooler URL for the API.
+Backend variables are documented in [`backend/.env.example`](backend/.env.example). `DATABASE_URL` accepts PostgreSQL URLs; production connections are given `sslmode=require` if omitted and insecure PostgreSQL SSL modes are rejected. Supabase URLs also get TLS in development, including pooler hostnames. Use the provider's direct or session-pooler URL for migrations and confirm its connection limit before selecting a pooler URL for the API.
 
-Production startup validates PostgreSQL, a 32-character private `SESSION_SECRET`, HTTPS-only trusted `FRONTEND_ORIGINS`, an absolute `UPLOAD_DIR`, and `UPLOAD_STORAGE_PERSISTENT=true`. Mount a durable volume at that path and back it up; this application currently stores bytes on a local filesystem, not Supabase Storage. HTTPS is required because production session cookies use `Secure`. Set `VITE_API_BASE_URL` to the deployed API URL ending in `/api`; no source edit is needed to change it.
+Production startup validates a PostgreSQL URL, a 32-character private `SESSION_SECRET`, trusted origin-only HTTPS `FRONTEND_ORIGINS` values (scheme, host, and optional port; no path), valid positive request/upload/session/rate-limit settings, an absolute `UPLOAD_DIR`, and `UPLOAD_STORAGE_PERSISTENT=true`. Mount a durable volume at that path and back it up; this application currently stores bytes on a local filesystem, not Supabase Storage. HTTPS is required because production session cookies use `Secure`. Set `VITE_API_BASE_URL` to the deployed API URL ending in `/api`; no source edit is needed to change it.
 
 ## Database and administrator
 
@@ -55,11 +55,79 @@ cd .. && pnpm build
 
 The backend suite uses an isolated in-memory SQLite database and temporary upload directory. Production runtime dependencies are listed in `backend/requirements-prod.txt`; development/test dependencies are in `backend/requirements.txt`.
 
-## Deployment
+Run dependency security checks before release and after dependency updates:
 
-Deploy frontend and backend independently or behind one HTTPS reverse proxy. Build the frontend with `pnpm install --frozen-lockfile && pnpm build`, then serve `dist/` from a static host with SPA fallback to `index.html`. Set `VITE_API_BASE_URL` at build time to the public API base. Run the API with `uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}` after migrations. Set production variables from a secret manager, including `ENVIRONMENT=production`, PostgreSQL `DATABASE_URL`, random `SESSION_SECRET`, exact HTTPS `FRONTEND_ORIGINS`, an absolute mounted `UPLOAD_DIR`, and `UPLOAD_STORAGE_PERSISTENT=true`. Production cookies use `SameSite=None; Secure` to support separately hosted frontends; browsers may block third-party cookies, so use a same-site custom domain or a shared reverse-proxy origin for reliable sessions. Do not expose the upload directory directly from the web server; the API performs access checks for downloads. `/api/health` checks database connectivity and returns 503 when the database is unavailable. API docs are disabled outside development.
+```sh
+npm audit
+cd backend
+python -m pip install pip-audit  # audit tool only; not an application dependency
+pip-audit -r requirements-prod.txt
+```
 
-The app enforces a declared HTTP request-body cap (`MAX_REQUEST_MB`, default 50 MB) and per-file size/type checks. Configure the reverse proxy's body limit as well; chunked requests may not carry `Content-Length`. Tune proxy, app and provider upload limits together.
+## Deployment on a Linux VPS (without containers)
+
+This setup serves the built frontend with Nginx and runs FastAPI as a systemd service. Nginx forwards `/api` to the local API, so the browser uses one HTTPS origin for the site and secure admin cookies. Supabase remains the database. Upload bytes live in `/var/lib/littlestar/uploads`; back up this directory with PostgreSQL.
+
+1. Provision a Linux VPS, point your domain's DNS to it, and allow inbound ports 80 and 443. Install Python 3.12+, Node.js 22+, pnpm 10, Nginx, and Certbot with its Nginx integration.
+2. Place the project at `/opt/littlestar`. Create the service account and upload directory:
+
+   ```sh
+   sudo useradd --system --home-dir /opt/littlestar --shell /usr/sbin/nologin littlestar
+   sudo install -d -o littlestar -g littlestar /var/lib/littlestar/uploads
+   ```
+
+3. Configure `backend/.env` from `backend/.env.example`: keep your Supabase PostgreSQL `DATABASE_URL`, generate a private secret with `python3 -c 'import secrets; print(secrets.token_urlsafe(48))'`, set `ENVIRONMENT=production`, set `FRONTEND_ORIGINS` to your exact HTTPS origin, set `UPLOAD_DIR=/var/lib/littlestar/uploads`, and `UPLOAD_STORAGE_PERSISTENT=true`. Do not commit either `.env` file.
+4. Install backend dependencies and apply migrations:
+
+   ```sh
+   cd /opt/littlestar/backend
+   python3 -m venv venv
+   venv/bin/pip install -r requirements-prod.txt
+   venv/bin/alembic upgrade head
+   ```
+
+5. Configure the root `.env` from `.env.example`. Use `VITE_API_BASE_URL=/api` and set the public `VITE_PUBLIC_*` values. Build the frontend:
+
+   ```sh
+   cd /opt/littlestar
+   pnpm install --frozen-lockfile
+   pnpm build
+   ```
+
+6. After installing dependencies and building `dist/`, make the app read-only to the API account and protect its secret file:
+
+   ```sh
+   sudo chown -R root:littlestar /opt/littlestar
+   sudo chmod -R g+rX /opt/littlestar
+   sudo chmod 640 /opt/littlestar/backend/.env
+   ```
+
+   The API service can read the code and its env file through the `littlestar` group; only the persistent upload directory is writable at runtime.
+
+7. Install and start the API service and Nginx site:
+
+   ```sh
+   sudo cp deploy/littlestar-api.service /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now littlestar-api
+   sudo cp deploy/nginx-littlestar.conf /etc/nginx/sites-available/littlestar
+   # Edit server_name to match your domain, then enable the site:
+   sudo ln -s /etc/nginx/sites-available/littlestar /etc/nginx/sites-enabled/littlestar
+   sudo nginx -t && sudo systemctl reload nginx
+   ```
+
+8. Issue/install the TLS certificate for your domain using Certbot's Nginx integration (for example, `sudo certbot --nginx -d YOUR_DOMAIN`). Check `https://YOUR_DOMAIN/api/health`, then create the administrator:
+
+   ```sh
+   cd /opt/littlestar/backend
+   sudo -u littlestar venv/bin/python -m app.cli create-admin
+   ```
+
+For an update, rebuild the frontend, run `venv/bin/alembic upgrade head` for schema changes, then restart with `sudo systemctl restart littlestar-api`. Check logs with `sudo journalctl -u littlestar-api -f` and `sudo tail -f /var/log/nginx/error.log`. Keep `/var/lib/littlestar/uploads` on durable disk and back it up with the database. Do not serve that directory directly; downloads go through API access checks.
+
+For separate frontend/API hosting, set `VITE_API_BASE_URL` to the HTTPS API base ending in `/api` and configure `FRONTEND_ORIGINS` to the exact HTTPS frontend origin. Cross-site browser cookie restrictions can interfere with admin sign-in, so the same-origin Nginx setup above is recommended. Vite embeds `VITE_PUBLIC_*` values in the static assets; these values are public, not secrets. `/api/health` checks database connectivity and returns 503 when the database is unavailable. API docs are disabled outside development.
+
+The app enforces a streaming HTTP request-body cap (`MAX_REQUEST_MB`, default 50 MB), including chunked requests, plus per-file size/type checks. Configure the reverse proxy's body limit as a second layer and tune proxy, app and provider upload limits together.
 
 ## Backup and recovery
 

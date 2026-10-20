@@ -1,0 +1,25 @@
+[Unit]
+Description=Little Star Playhouse FastAPI service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=littlestar
+Group=littlestar
+WorkingDirectory=/opt/littlestar/backend
+EnvironmentFile=/opt/littlestar/backend/.env
+Environment=PYTHONPATH=/opt/littlestar/backend
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/littlestar/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
+Restart=on-failure
+RestartSec=5
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/littlestar/uploads
+
+[Install]
+WantedBy=multi-user.target
