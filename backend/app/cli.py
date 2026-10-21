@@ -89,13 +89,44 @@ async def migrate_local_files_to_supabase() -> None:
     print(f"Migrated {migrated} file(s). Local originals were retained.")
 
 
+async def reset_admin_password_interactive() -> None:
+    """Reset an existing administrator password without exposing it in shell history."""
+    username = input("Admin Username: ").strip()
+    if not username:
+        print("Error: A username is required.")
+        sys.exit(1)
+
+    password = getpass.getpass("New password (at least 12 characters): ")
+    if len(password) < 12:
+        print("Error: Password must be at least 12 characters.")
+        sys.exit(1)
+    confirm_password = getpass.getpass("Confirm new password: ")
+    if password != confirm_password:
+        print("Error: Passwords do not match.")
+        sys.exit(1)
+
+    async with async_session_factory() as db:
+        result = await db.execute(
+            select(User).where(func.lower(User.username) == username.lower(), User.role == "ADMIN")
+        )
+        admin = result.scalar_one_or_none()
+        if admin is None:
+            print("Error: No administrator with that username was found.")
+            sys.exit(1)
+        admin.password_hash = hash_password(password)
+        await db.commit()
+    print(f"Password reset successfully for administrator '{username}'.")
+
+
 def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] == "create-admin":
         asyncio.run(create_admin_interactive())
     elif len(sys.argv) > 1 and sys.argv[1] == "migrate-local-files-to-supabase":
         asyncio.run(migrate_local_files_to_supabase())
+    elif len(sys.argv) > 1 and sys.argv[1] == "reset-admin-password":
+        asyncio.run(reset_admin_password_interactive())
     else:
-        print("Usage: python -m app.cli {create-admin|migrate-local-files-to-supabase}")
+        print("Usage: python -m app.cli {create-admin|reset-admin-password|migrate-local-files-to-supabase}")
 
 
 if __name__ == "__main__":

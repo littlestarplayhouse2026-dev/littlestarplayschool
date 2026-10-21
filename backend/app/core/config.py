@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     SUPABASE_URL: str | None = None
     SUPABASE_SERVICE_ROLE_KEY: str | None = None
     SUPABASE_STORAGE_BUCKET: str | None = None
+    ADMIN_BOOTSTRAP_USERNAME: str | None = None
+    ADMIN_BOOTSTRAP_PASSWORD: str | None = None
     MAX_UPLOAD_MB: int = Field(default=10, gt=0)
     MAX_REQUEST_MB: int = Field(default=50, gt=0)
     SESSION_MAX_AGE_SECONDS: int = Field(default=86400, gt=0)
@@ -84,6 +86,10 @@ class Settings(BaseSettings):
                     )
                 if not Path(self.UPLOAD_DIR).is_absolute():
                     raise ValueError("Production UPLOAD_DIR must be an absolute persistent-volume path.")
+        if bool(self.ADMIN_BOOTSTRAP_USERNAME) != bool(self.ADMIN_BOOTSTRAP_PASSWORD):
+            raise ValueError("ADMIN_BOOTSTRAP_USERNAME and ADMIN_BOOTSTRAP_PASSWORD must be set together.")
+        if self.ADMIN_BOOTSTRAP_USERNAME and len(self.ADMIN_BOOTSTRAP_PASSWORD or "") < 12:
+            raise ValueError("ADMIN_BOOTSTRAP_PASSWORD must be at least 12 characters.")
         return self
 
     @property

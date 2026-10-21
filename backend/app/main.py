@@ -12,6 +12,10 @@ from fastapi.responses import JSONResponse
 from app.api.router import api_router
 from app.core.config import settings
 from app.db.session import engine
+from app.db.session import async_session_factory
+from app.core.security import hash_password
+from app.models.user import User
+from sqlalchemy import func, select
 
 logging.basicConfig(
     level=logging.INFO if settings.ENVIRONMENT != "development" else logging.DEBUG,
@@ -97,6 +101,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.info("Local upload directory configured at: %s", upload_path.resolve())
     else:
         logger.info("Persistent file storage configured with Supabase Storage")
+
+    # Temporary dashboard-only recovery path for deployments without shell access.
+    # Remove both environment variables as soon as the service starts successfully.
+    if settings.ADMIN_BOOTSTRAP_USERNAME and settings.ADMIN_BOOTSTRAP_PASSWORD:
+        async with async_session_factory() as db:
+            result = await db.execute(
+                select(User).where(func.lower(User.username) == settings.ADMIN_BOOTSTRAP_USERNAME.lower())
+            )
+            admin = result.scalar_one_or_none()
+            if admin is not None and admin.role != "ADMIN":
+                raise RuntimeError("ADMIN_BOOTSTRAP_USERNAME belongs to a non-administrator account")
+            if admin is None:
+                admin = User(
+                    username=settings.ADMIN_BOOTSTRAP_USERNAME,
+                    display_name="Playhouse Administrator",
+                    role="ADMIN",
+                    is_active=True,
+                    password_hash=hash_password(settings.ADMIN_BOOTSTRAP_PASSWORD),
+                )
+                db.add(admin)
+            else:
+                admin.password_hash = hash_password(settings.ADMIN_BOOTSTRAP_PASSWORD)
+                admin.is_active = True
+            await db.commit()
+            logger.warning("Temporary administrator bootstrap applied for username '%s'; remove bootstrap variables now.", admin.username)
 
     # Database schema changes are applied explicitly with Alembic. Accounts and
     # content are created through the protected CLI and admin interface.

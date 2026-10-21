@@ -91,3 +91,10 @@ def test_production_supabase_storage_requires_all_provider_settings():
 def test_production_rejects_unknown_storage_backend():
     with pytest.raises(ValidationError, match="STORAGE_BACKEND"):
         production_settings(STORAGE_BACKEND="remote")
+
+
+def test_admin_bootstrap_settings_must_be_supplied_together_and_use_strong_password():
+    with pytest.raises(ValidationError, match="must be set together"):
+        production_settings(ADMIN_BOOTSTRAP_USERNAME="admin")
+    with pytest.raises(ValidationError, match="at least 12 characters"):
+        production_settings(ADMIN_BOOTSTRAP_USERNAME="admin", ADMIN_BOOTSTRAP_PASSWORD="short")
