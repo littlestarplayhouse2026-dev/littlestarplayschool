@@ -8,6 +8,9 @@ from typing import AsyncGenerator
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from alembic import command as alembic_command
+from alembic.config import Config as AlembicConfig
+from sqlalchemy.engine import Connection
 
 from app.api.router import api_router
 from app.core.config import settings
@@ -93,6 +96,19 @@ class RequestSizeLimitMiddleware:
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application startup and shutdown lifespan handler."""
     logger.info("Starting Little Star Playhouse API (env=%s)...", settings.ENVIRONMENT)
+
+    # Render deployments may not provide shell/pre-deploy access. Apply pending,
+    # versioned schema changes before any startup task queries application tables.
+    alembic_ini = Path(__file__).resolve().parents[1] / "alembic.ini"
+
+    def upgrade_schema(connection: Connection) -> None:
+        alembic_config = AlembicConfig(str(alembic_ini))
+        alembic_config.attributes["connection"] = connection
+        alembic_command.upgrade(alembic_config, "head")
+
+    async with engine.connect() as connection:
+        await connection.run_sync(upgrade_schema)
+    logger.info("Database schema is at the latest Alembic revision")
 
     # Local storage needs a directory; Supabase storage must never fall back to disk.
     if settings.STORAGE_BACKEND.strip().lower() == "local":
