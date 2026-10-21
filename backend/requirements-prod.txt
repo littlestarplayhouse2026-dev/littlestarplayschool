@@ -11,3 +11,4 @@ python-multipart==0.0.32
 aiofiles==25.1.0
 bleach==6.4.0
 email-validator==2.3.0
+supabase==2.33.0

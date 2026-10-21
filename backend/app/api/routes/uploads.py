@@ -1,11 +1,11 @@
 """Upload and file download routes with strict access controls."""
 
 from datetime import datetime, timezone
-from pathlib import Path
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -22,15 +22,16 @@ from app.models.stored_file import StoredFile
 from app.models.user import User
 from app.schemas.auth import MessageResponse
 from app.schemas.upload import PaginatedUploadResponse, UploadListResponse, UploadResponse
-from app.services.storage_service import LocalStorageService
+from app.services.storage_service import StorageError, get_storage_service, get_storage_service_for_file
 from app.utils.datetime_utils import get_db_now
 
 router = APIRouter(prefix="/uploads", tags=["Uploads"])
+logger = logging.getLogger(__name__)
 
 
-def _storage_service() -> LocalStorageService:
-    """Build from current settings so test/deployment volume overrides are honored."""
-    return LocalStorageService(upload_dir=settings.UPLOAD_DIR, max_file_bytes=settings.max_upload_bytes)
+def _storage_service():
+    """Build the configured adapter, honoring test/deployment setting overrides."""
+    return get_storage_service()
 
 
 @router.post("", response_model=UploadListResponse, status_code=status.HTTP_201_CREATED)
@@ -48,7 +49,7 @@ async def upload_files(
         )
 
     uploaded: list[UploadResponse] = []
-    saved_keys: list[str] = []
+    saved_keys: list[tuple[object, str]] = []
     storage = _storage_service()
     try:
         for file in files:
@@ -63,7 +64,7 @@ async def upload_files(
                 uploader_id=user.id,
                 is_public=False,
             )
-            saved_keys.append(stored_file.storage_key)
+            saved_keys.append((storage, stored_file.storage_key))
             db.add(stored_file)
             await db.flush()
 
@@ -82,13 +83,15 @@ async def upload_files(
         await db.commit()
     except ValueError as err:
         await db.rollback()
-        for key in saved_keys:
-            await storage.delete_file(key)
+        await _cleanup_uploaded_objects(saved_keys)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(err))
+    except StorageError:
+        await db.rollback()
+        await _cleanup_uploaded_objects(saved_keys)
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="File storage is temporarily unavailable")
     except Exception:
         await db.rollback()
-        for key in saved_keys:
-            await storage.delete_file(key)
+        await _cleanup_uploaded_objects(saved_keys)
         raise
     return UploadListResponse(files=uploaded)
 
@@ -202,6 +205,9 @@ async def delete_upload(
     except OSError:
         # Metadata is removed; failed physical cleanup leaves an unreachable orphan.
         pass
+    except StorageError:
+        # The DB metadata is already committed. Leave an unreachable object for later cleanup.
+        logger.warning("Storage object cleanup failed after metadata deletion")
     return MessageResponse(message="File deleted successfully")
 
 
@@ -211,7 +217,7 @@ async def download_file(
     request: Request,
     preview: bool = Query(False),
     db: AsyncSession = Depends(get_db),
-) -> FileResponse:
+) -> Response:
     """Download or preview a stored file with authorization checks.
 
     Public visitors may only download files attached to currently published,
@@ -297,21 +303,39 @@ async def download_file(
             detail="You are not authorized to download this file",
         )
 
-    # 4. Resolve filesystem path
-    file_path = await _storage_service().get_file_path(stored_file.storage_key)
-    if not file_path.exists():
+    # 4. Fetch bytes only after the authorization check above.
+    try:
+        file_bytes = await get_storage_service_for_file(stored_file).get_file_bytes(stored_file.storage_key)
+    except FileNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="File binary is missing from storage",
+        )
+    except StorageError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="File storage is temporarily unavailable",
         )
 
     # 5. Determine inline vs attachment
     is_inline = preview or stored_file.mime_type.startswith("image/") or stored_file.mime_type == "application/pdf"
     disposition = "inline" if is_inline else "attachment"
 
-    return FileResponse(
-        path=file_path,
+    from urllib.parse import quote
+
+    encoded_filename = quote(stored_file.display_filename, safe="")
+    return Response(
+        content=file_bytes,
         media_type=stored_file.mime_type,
-        filename=stored_file.display_filename,
-        content_disposition_type=disposition,
+        headers={"Content-Disposition": f"{disposition}; filename*=UTF-8''{encoded_filename}"},
     )
+
+
+async def _cleanup_uploaded_objects(saved: list[tuple[object, str]]) -> None:
+    """Best-effort rollback for object uploads if metadata transaction fails."""
+    for storage, key in saved:
+        try:
+            await storage.delete_file(key)
+        except (OSError, StorageError, ValueError):
+            # The file is unreferenced; cleanup can be retried out of band.
+            continue

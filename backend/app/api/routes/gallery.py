@@ -15,14 +15,14 @@ from app.models.stored_file import StoredFile
 from app.models.user import User
 from app.schemas.gallery import GalleryItemResponse, GalleryListResponse
 from app.schemas.auth import MessageResponse
-from app.services.storage_service import LocalStorageService
+from app.services.storage_service import StorageError, get_storage_service
 
 router = APIRouter(prefix="/gallery", tags=["Gallery"])
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
 
-def _storage_service() -> LocalStorageService:
-    return LocalStorageService(upload_dir=settings.UPLOAD_DIR, max_file_bytes=settings.max_upload_bytes)
+def _storage_service():
+    return get_storage_service()
 
 
 @router.get("", response_model=GalleryListResponse)
@@ -79,12 +79,26 @@ async def create_gallery_image(
     except ValueError as err:
         await db.rollback()
         if stored_file:
-            await storage.delete_file(stored_file.storage_key)
+            try:
+                await storage.delete_file(stored_file.storage_key)
+            except (OSError, StorageError, ValueError):
+                pass
         raise HTTPException(status_code=400, detail=str(err))
+    except StorageError:
+        await db.rollback()
+        if stored_file:
+            try:
+                await storage.delete_file(stored_file.storage_key)
+            except (OSError, StorageError):
+                pass
+        raise HTTPException(status_code=503, detail="File storage is temporarily unavailable")
     except Exception:
         await db.rollback()
         if stored_file:
-            await storage.delete_file(stored_file.storage_key)
+            try:
+                await storage.delete_file(stored_file.storage_key)
+            except (OSError, StorageError, ValueError):
+                pass
         raise
 
 

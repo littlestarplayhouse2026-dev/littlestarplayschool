@@ -18,6 +18,7 @@ class StoredFile(Base):
     storage_key: Mapped[str] = mapped_column(
         String(512), unique=True, nullable=False
     )
+    storage_backend: Mapped[str] = mapped_column(String(20), nullable=False, default="local")
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     display_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(100), nullable=False)

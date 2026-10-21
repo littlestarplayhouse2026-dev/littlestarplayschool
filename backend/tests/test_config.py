@@ -70,3 +70,24 @@ def test_resource_and_rate_limit_values_must_be_positive():
         production_settings(SESSION_MAX_AGE_SECONDS=-1)
     with pytest.raises(ValidationError):
         production_settings(PORT=70000)
+
+
+def test_production_supabase_storage_does_not_require_a_persistent_disk():
+    configured = production_settings(
+        STORAGE_BACKEND="supabase",
+        SUPABASE_URL="https://project-ref.supabase.co",
+        SUPABASE_SERVICE_ROLE_KEY="private-test-service-role-key",
+        SUPABASE_STORAGE_BUCKET="playhouse-uploads",
+        UPLOAD_STORAGE_PERSISTENT=False,
+    )
+    assert configured.STORAGE_BACKEND == "supabase"
+
+
+def test_production_supabase_storage_requires_all_provider_settings():
+    with pytest.raises(ValidationError, match="SUPABASE_URL"):
+        production_settings(STORAGE_BACKEND="supabase")
+
+
+def test_production_rejects_unknown_storage_backend():
+    with pytest.raises(ValidationError, match="STORAGE_BACKEND"):
+        production_settings(STORAGE_BACKEND="remote")

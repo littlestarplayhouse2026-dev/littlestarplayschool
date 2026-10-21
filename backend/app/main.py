@@ -90,10 +90,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application startup and shutdown lifespan handler."""
     logger.info("Starting Little Star Playhouse API (env=%s)...", settings.ENVIRONMENT)
 
-    # 1. Ensure upload directory exists
-    upload_path = Path(settings.UPLOAD_DIR)
-    upload_path.mkdir(parents=True, exist_ok=True)
-    logger.info("Upload directory configured at: %s", upload_path.resolve())
+    # Local storage needs a directory; Supabase storage must never fall back to disk.
+    if settings.STORAGE_BACKEND.strip().lower() == "local":
+        upload_path = Path(settings.UPLOAD_DIR)
+        upload_path.mkdir(parents=True, exist_ok=True)
+        logger.info("Local upload directory configured at: %s", upload_path.resolve())
+    else:
+        logger.info("Persistent file storage configured with Supabase Storage")
 
     # Database schema changes are applied explicitly with Alembic. Accounts and
     # content are created through the protected CLI and admin interface.

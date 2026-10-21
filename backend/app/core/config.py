@@ -16,8 +16,12 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     PORT: int = Field(default=8000, ge=1, le=65535)
     FRONTEND_ORIGINS: str = ""
+    STORAGE_BACKEND: str = "local"
     UPLOAD_DIR: str = "uploads"
     UPLOAD_STORAGE_PERSISTENT: bool = False
+    SUPABASE_URL: str | None = None
+    SUPABASE_SERVICE_ROLE_KEY: str | None = None
+    SUPABASE_STORAGE_BUCKET: str | None = None
     MAX_UPLOAD_MB: int = Field(default=10, gt=0)
     MAX_REQUEST_MB: int = Field(default=50, gt=0)
     SESSION_MAX_AGE_SECONDS: int = Field(default=86400, gt=0)
@@ -58,10 +62,28 @@ class Settings(BaseSettings):
                     or parsed_origin.fragment
                 ):
                     raise ValueError("Production FRONTEND_ORIGINS must contain origin-only HTTPS URLs.")
-            if not self.UPLOAD_STORAGE_PERSISTENT:
-                raise ValueError("Production requires UPLOAD_STORAGE_PERSISTENT=true and a persistent volume.")
-            if not Path(self.UPLOAD_DIR).is_absolute():
-                raise ValueError("Production UPLOAD_DIR must be an absolute persistent-volume path.")
+            storage_backend = self.STORAGE_BACKEND.strip().lower()
+            if storage_backend not in {"local", "supabase"}:
+                raise ValueError("STORAGE_BACKEND must be either 'local' or 'supabase'.")
+            if storage_backend == "supabase":
+                if not self.SUPABASE_URL or not self.SUPABASE_SERVICE_ROLE_KEY or not self.SUPABASE_STORAGE_BUCKET:
+                    raise ValueError(
+                        "Production Supabase Storage requires SUPABASE_URL, "
+                        "SUPABASE_SERVICE_ROLE_KEY, and SUPABASE_STORAGE_BUCKET."
+                    )
+                storage_url = urlsplit(self.SUPABASE_URL)
+                if storage_url.scheme != "https" or not storage_url.hostname or storage_url.path not in {"", "/"}:
+                    raise ValueError("SUPABASE_URL must be an HTTPS project origin without a path.")
+                if not self.SUPABASE_STORAGE_BUCKET.strip() or "/" in self.SUPABASE_STORAGE_BUCKET:
+                    raise ValueError("SUPABASE_STORAGE_BUCKET must be a bucket name, not a path.")
+            else:
+                if not self.UPLOAD_STORAGE_PERSISTENT:
+                    raise ValueError(
+                        "Production local storage requires UPLOAD_STORAGE_PERSISTENT=true and a persistent volume; "
+                        "for ephemeral hosts configure STORAGE_BACKEND=supabase."
+                    )
+                if not Path(self.UPLOAD_DIR).is_absolute():
+                    raise ValueError("Production UPLOAD_DIR must be an absolute persistent-volume path.")
         return self
 
     @property
